@@ -13,7 +13,8 @@ from .schemas import (
 from .auth import login_employee
 from .services.invitation_service import accept_invitation
 from .services.employee_service import create_employee_with_invitation
-
+from .dependencies import get_current_employee
+from .models import Employee
 
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
@@ -37,15 +38,14 @@ def accept_invitation_route(invitation_data: InvitationAccept, session:Session =
             status_code=400,
             detail=str(e),
         )
-from uuid import UUID
+
 @router.post("/employees",response_model=EmployeeInvitationResponse)
-def register_employees(employee_data:EmployeeCreate, restaurant_id:UUID, created_by:UUID, session:Session = Depends(get_session)):
+def register_employees(employee_data:EmployeeCreate, current_employee:Employee = Depends(get_current_employee), session:Session = Depends(get_session)):
     try:
         employee, token = create_employee_with_invitation(
             session=session,
             employee_data=employee_data,
-            restaurant_id=restaurant_id,
-            created_by=created_by,
+            current_employee=current_employee,
         )
 
         return EmployeeInvitationResponse(

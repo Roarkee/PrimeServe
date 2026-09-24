@@ -17,7 +17,7 @@ def hash_token(token: str) ->str:
 
 
 
-def create_employee_invitation(employee: Employee, session: Session, created_by:UUID)->str:
+def create_employee_invitation(employee: Employee, session: Session, current_employee:Employee)->str:
 
    
     employee_invitations = session.exec(select(EmployeeInvitation).where(
@@ -38,7 +38,7 @@ def create_employee_invitation(employee: Employee, session: Session, created_by:
         expires_at=now + timedelta(
             hours=INVITATION_EXPIRES_HOURS
         ),
-        created_by=created_by,
+        created_by=current_employee.id,
     )
     session.add(invitation)
     return token
