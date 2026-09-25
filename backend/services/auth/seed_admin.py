@@ -70,18 +70,11 @@ def seed_admin():
         # Create ADMIN role for this restaurant
         admin_role = session.exec(
             select(Role).where(
-                Role.restaurant_id == RESTAURANT_ID,
                 Role.name == "ADMIN",
             )
         ).first()
 
-        if not admin_role:
-            admin_role = Role(
-                restaurant_id=RESTAURANT_ID,
-                name="ADMIN",
-            )
-            session.add(admin_role)
-            session.flush()
+       
 
         # Assign ADMIN role to employee
         employee_role = EmployeeRole(

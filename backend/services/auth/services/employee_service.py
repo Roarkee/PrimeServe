@@ -1,5 +1,5 @@
 from sqlmodel import Session, select
-from ..models import Employee, EmployeeStatus
+from ..models import Employee, EmployeeStatus,Role,EmployeeRole
 from ..schemas import EmployeeCreate
 from .invitation_service import create_employee_invitation
 
@@ -13,7 +13,13 @@ def create_employee_with_invitation(session: Session, employee_data: EmployeeCre
 
     if existing_employee:
         raise ValueError("an employee with this email already exists")
-    
+
+    role = session.exec(
+        select(Role).where(Role.id == employee_data.role_id)
+    ).first()
+
+    if not role:
+        raise ValueError("invalid role assignment")
 
     employee = Employee(
         restaurant_id=current_employee.restaurant_id,
@@ -27,6 +33,12 @@ def create_employee_with_invitation(session: Session, employee_data: EmployeeCre
     try:
         session.add(employee)
         session.flush()
+
+        employee_role = EmployeeRole(
+            employee_id=employee.id,
+            role_id=role.id,)
+
+        session.add(employee_role)
 
         token = create_employee_invitation(
             session=session,

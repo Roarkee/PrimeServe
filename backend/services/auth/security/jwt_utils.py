@@ -42,13 +42,24 @@ def create_refresh_token(employee_id: UUID, restaurant_id: UUID) ->str:
 
 
 
-def verify_token(token:str) ->dict:
+def decode_token(token:str)->dict:
     try:
         payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=JWT_ALGO)
-        if payload["type"] != "access":
-            raise HTTPException(status_code = 401, detail = "invalid token type")
         return payload
     except jwt.ExpiredSignatureError:
-        raise ValueError("jwt token expired")
+            raise ValueError("jwt token expired")
     except jwt.InvalidTokenError:
         raise ValueError("invalid token")
+
+def verify_access_token(token:str) ->dict:
+   payload = decode_token(token)
+   if payload.get("type") != "access":
+       raise ValueError("invalid token type")
+   return payload  
+
+def verify_refresh_token(token:str)->dict:
+    payload = decode_token(token)
+    if payload.get("type") != "refresh":
+        raise ValueError("invalid token type")
+    return payload
+ 

@@ -31,7 +31,6 @@ class Role(SQLModel, table=True):
     __table_args__ = {"schema": AUTH_SCHEMA}
 
     id: uuid.UUID = Field(default_factory=uuid.uuid4,primary_key=True,)
-    restaurant_id: uuid.UUID = Field(nullable=False,)
     name: str = Field(max_length=50,nullable=False,)
 
 

@@ -11,6 +11,7 @@ class EmployeeCreate(BaseModel):
     last_name: str
     email: EmailStr
     phone: str | None = None
+    role_id: UUID
 
 
 class LoginRequest(BaseModel):
@@ -52,3 +53,6 @@ class EmployeeResponse(BaseModel):
 class EmployeeInvitationResponse(BaseModel):
     employee: EmployeeResponse
     invitation_token: str
+
+class RefreshTokenRequest(BaseModel):
+    refresh_token: str    
