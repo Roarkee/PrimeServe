@@ -23,7 +23,8 @@ def create_access_token(employee_id:UUID, restaurant_id: UUID)->str:
         "restaurant_id": str(restaurant_id),
         "type": "access",
         "iat": now,
-        "exp": now +timedelta(minutes = ACCESS_TOKEN_EXPIRES_MINUTES)
+        "exp": now +timedelta(minutes = ACCESS_TOKEN_EXPIRES_MINUTES),
+        "permissions": {}
     }
     return jwt.encode(payload, JWT_SECRET_KEY, algorithm=JWT_ALGO)
 
@@ -35,7 +36,8 @@ def create_refresh_token(employee_id: UUID, restaurant_id: UUID) ->str:
         "restaurant_id": str(restaurant_id),
         "type": "refresh",
         "iat": now,
-        "exp": now +timedelta(days=REFRESH_TOKEN_EXPIRES_DAYS)
+        "exp": now +timedelta(days=REFRESH_TOKEN_EXPIRES_DAYS),
+        "permissions": {}
 
     }
     return jwt.encode(payload, JWT_SECRET_KEY, algorithm=JWT_ALGO)

@@ -22,6 +22,11 @@ PERMISSIONS = {
     "inventory:view": "View inventory",
     "inventory:adjust": "Adjust inventory",
 
+    "catalog:view": "View catalog",
+    "catalog:create": "Create catalog items",
+    "catalog:update": "Update catalog items",
+    "catalog:delete": "Delete catalog items",
+
     "kitchen:view": "View kitchen orders",
     "kitchen:update": "Update kitchen orders",
 
@@ -47,12 +52,20 @@ ROLE_PERMISSIONS = {
         "inventory:view",
         "inventory:adjust",
 
+        "catalog:view",
+        "catalog:create",
+        "catalog:update",
+        "catalog:delete",
+
         "reports:view",
     ],
 
     "CASHIER": [
         "order:view",
         "order:create",
+
+        "catalog:view",
+
 
         "payment:view",
         "payment:create",
@@ -61,9 +74,19 @@ ROLE_PERMISSIONS = {
     "WAITER": [
         "order:view",
         "order:create",
+
+
+        "catalog:view",
+        "catalog:create",
+        "catalog:update",     
     ],
 
     "CHEF": [
+        "catalog:view",
+        "catalog:create",
+        "catalog:update",
+        "catalog:delete",
+
         "kitchen:view",
         "kitchen:update",
     ],

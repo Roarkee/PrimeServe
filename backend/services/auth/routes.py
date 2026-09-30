@@ -1,7 +1,7 @@
 from fastapi import Depends, HTTPException, APIRouter,status
 from sqlmodel import Session,select
 from uuid import UUID
-from .models import Role
+from .models import Role, Employee
 from .database import get_session
 from .schemas import (
     LoginRequest,
@@ -12,14 +12,13 @@ from .schemas import (
     EmployeeInvitationResponse,
     RefreshTokenRequest
 )
-from .auth import login_employee
+from .authentication import login_employee
 from .services.invitation_service import accept_invitation
 from .services.employee_service import create_employee_with_invitation
 from .dependencies import require_permission, get_current_employee
-from .models import Employee
 from .security.jwt_utils import verify_access_token,verify_refresh_token,create_access_token
 
-
+'''remember to verify that menuitem and option group belong to the same restaurant'''
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 @router.post("/login", response_model=TokenResponse)
 def login(login_data: LoginRequest, session:Session=Depends(get_session)):
