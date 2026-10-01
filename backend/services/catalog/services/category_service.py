@@ -49,7 +49,7 @@ class CategoryService:
 
         session.add(category)
         session.commit()
-        session.refresh()
+        session.refresh(category)
         return category
 
 

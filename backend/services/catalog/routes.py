@@ -16,13 +16,13 @@ def create_category(session:SessionDep, category_data: CategoryCreate, current_u
 def update_category(pk:UUID, session:SessionDep, category_data: CategoryUpdate, current_user=Depends(require_permission("catalog:update"))):
     return CategoryService.update_category(pk, category_data, session, current_user["restaurant_id"])
 
-@router.get("/categories", response_model=CategoryResponse)
+@router.get("/categories", response_model=list[CategoryResponse])
 def get_categories(session: SessionDep, current_user= Depends(require_permission("catalog:view"))):
     return CategoryService.get_categories(session, current_user["restaurant_id"])
 
 
 @router.get("/categories/{pk}", response_model=CategoryResponse)
 def get_categories(pk:UUID, session: SessionDep, current_user= Depends(require_permission("catalog:view"))):
-    return CategoryService.get_category(session, current_user["restaurant_id"])
+    return CategoryService.get_category(pk, session, current_user["restaurant_id"])
 
 

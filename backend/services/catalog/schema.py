@@ -27,3 +27,4 @@ class CategoryResponse(BaseModel):
     is_active: bool
     created_at: datetime
     updated_at: datetime
+    restaurant_id: UUID
