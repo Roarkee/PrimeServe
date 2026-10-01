@@ -20,7 +20,7 @@ def login_employee(session: Session, login_data: LoginRequest) -> TokenResponse:
     if not verify_password(login_data.password, employee.password_hash):
         raise ValueError("invalid email or password")
 
-    access_token = create_access_token(employee.id, employee.restaurant_id)
-    refresh_token = create_refresh_token(employee.id, employee.restaurant_id)
+    access_token = create_access_token(session, employee.id, employee.restaurant_id)
+    refresh_token = create_refresh_token(session, employee.id, employee.restaurant_id)
 
     return TokenResponse(access_token=access_token, refresh_token=refresh_token)

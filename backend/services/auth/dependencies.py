@@ -1,4 +1,4 @@
-from .database import get_session
+from .database import SessionDep
 from fastapi import Depends, HTTPException,status
 from fastapi.security import HTTPAuthorizationCredentials,HTTPBearer
 from uuid import UUID
@@ -12,12 +12,13 @@ from .models import (
     Permission,
 )
 
+
 # this is to get the authorization bearer from the headers
 security = HTTPBearer()
 
 # this function is to get the current employee from the jwt from the request
 
-def get_current_employee(session: Session=Depends(get_session),credentials:HTTPAuthorizationCredentials=Depends(security))->Employee:
+def get_current_employee(session:SessionDep,credentials:HTTPAuthorizationCredentials=Depends(security))->Employee:
     # this is the actual jwt
     token = credentials.credentials
     
@@ -67,7 +68,7 @@ def get_current_employee(session: Session=Depends(get_session),credentials:HTTPA
 
 def require_permission(permission_code:str):
     def permission_dependency(
-            session:Session=Depends(get_session),
+            session:SessionDep,
             current_employee:Employee=Depends(get_current_employee)
             )->Employee:
         permission = session.exec(
@@ -93,4 +94,5 @@ def require_permission(permission_code:str):
         return current_employee
     
     return permission_dependency
+
 

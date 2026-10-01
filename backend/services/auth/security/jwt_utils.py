@@ -5,6 +5,9 @@ from uuid import UUID
 from dotenv import load_dotenv
 from fastapi.exceptions import HTTPException
 load_dotenv()
+from ..database import SessionDep
+from ..utils import get_user_permissions
+
 
 JWT_SECRET_KEY = os.getenv("SECRET_KEY")
 if not JWT_SECRET_KEY:
@@ -16,7 +19,7 @@ ACCESS_TOKEN_EXPIRES_MINUTES = 30
 REFRESH_TOKEN_EXPIRES_DAYS = 7
 
 
-def create_access_token(employee_id:UUID, restaurant_id: UUID)->str:
+def create_access_token(session:SessionDep,employee_id:UUID, restaurant_id: UUID)->str:
     now = datetime.now(timezone.utc)
     payload = {
         "sub": str(employee_id),
@@ -24,11 +27,11 @@ def create_access_token(employee_id:UUID, restaurant_id: UUID)->str:
         "type": "access",
         "iat": now,
         "exp": now +timedelta(minutes = ACCESS_TOKEN_EXPIRES_MINUTES),
-        "permissions": {}
+        "permissions": get_user_permissions(session, employee_id)
     }
     return jwt.encode(payload, JWT_SECRET_KEY, algorithm=JWT_ALGO)
 
-def create_refresh_token(employee_id: UUID, restaurant_id: UUID) ->str:
+def create_refresh_token(session:SessionDep,employee_id: UUID, restaurant_id: UUID) ->str:
     now = datetime.now(timezone.utc)
 
     payload = {
@@ -37,8 +40,7 @@ def create_refresh_token(employee_id: UUID, restaurant_id: UUID) ->str:
         "type": "refresh",
         "iat": now,
         "exp": now +timedelta(days=REFRESH_TOKEN_EXPIRES_DAYS),
-        "permissions": {}
-
+        "permissions": get_user_permissions(session, employee_id)
     }
     return jwt.encode(payload, JWT_SECRET_KEY, algorithm=JWT_ALGO)
 
