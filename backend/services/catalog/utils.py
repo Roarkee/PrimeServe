@@ -11,19 +11,33 @@ SECRET_KEY = getenv("SECRET_KEY")
 
 JWT_ALGO = "HS256"
 
+import hashlib
+
+print("CATALOG SECRET LENGTH:", len(SECRET_KEY))
+print(
+    "CATALOG SECRET HASH:",
+    hashlib.sha256(SECRET_KEY.encode()).hexdigest())
+
+
 def decode_token(token:str)->dict:
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=JWT_ALGO)
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[JWT_ALGO])
+        print("DECODED PAYLOAD:", payload)
     
         return payload
-    except jwt.InvalidTokenError:
-        raise ValueError("the token is not a valid token")
-    except jwt.ExpiredSignatureError:
-        raise ValueError("the token has expired. Reauthenticate")
+    # except jwt.ExpiredSignatureError:
+    #     raise ValueError("The token has expired. Reauthenticate")
+
+    # except jwt.InvalidTokenError:
+    #     raise ValueError("The token is not a valid token")
+
+    except Exception as e:
+        print("JWT ERROR:", type(e).__name__, str(e))
+        raise
 
 def v_and_d(token:str):
 
     payload = decode_token(token)
-    if payload['type']!="access":
+    if payload.get('type')!="access":
         raise ValueError("this token is invalid")
     return payload

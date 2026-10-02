@@ -41,8 +41,8 @@ class CategoryService:
 
         if category is None:
             raise ValueError("no category exists")
-
-        updates = data.model_dump()
+    # so that it doesn't accidentally set the optional values to None
+        updates = data.model_dump(exclude_unset=True)
 
         for field, value in updates.items():
             setattr(category, field, value)
