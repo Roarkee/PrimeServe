@@ -1,7 +1,7 @@
 from fastapi import APIRouter, status, HTTPException,Depends
 from .models import (Category,MenuItem,MenuItemOptionGroup,MenuItemStatus,Option,OptionGroup)
 from .database import SessionDep
-from .schema import CategoryResponse,CategoryCreate,CategoryUpdate, MenuItemResponse, MenuItemCreate,MenuItemUpdate,OptionGroupResponse,OptionGroupCreate,OptionGroupUpdate,OptionCreate,OptionResponse,OptionUpdate,MenuItemOptionGroupCreate,MenuItemOptionGroupResponse,MenuItemOptionGroupUpdate
+from .schema import MenuResponse, CategoryResponse,CategoryCreate,CategoryUpdate, MenuItemResponse, MenuItemCreate,MenuItemUpdate,OptionGroupResponse,OptionGroupCreate,OptionGroupUpdate,OptionCreate,OptionResponse,OptionUpdate,MenuItemOptionGroupCreate,MenuItemOptionGroupResponse,MenuItemOptionGroupUpdate
 from .dependencies import require_permission
 from .services.category_service import CategoryService
 from .services.menu_services import MenuService
@@ -9,7 +9,7 @@ from uuid import UUID
 from .services.option_group_service import OptionGroupService
 from .services.option_service import OptionService
 from .services.menu_item_option_service import MenuItemOptionGroupService
-
+from .services.pos_menu_service import MenuReadService
 
 
 # since the routes are not meaty i'll write them all in one file. if they later explode then i'll consider splitting them
@@ -292,6 +292,21 @@ def detach_option_group(
 ):
     MenuItemOptionGroupService.detach_option_group(
         pk,
+        session,
+        current_user["restaurant_id"]
+    )
+
+
+
+@router.get(
+    "/menu",
+    response_model=MenuResponse
+)
+def get_menu(
+    session: SessionDep,
+    current_user=Depends(require_permission("catalog:view"))
+):
+    return MenuReadService.get_menu(
         session,
         current_user["restaurant_id"]
     )

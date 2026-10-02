@@ -144,3 +144,44 @@ class MenuItemOptionGroupResponse(BaseModel):
     option_group_id: UUID
     display_order: int
 
+class MenuOptionResponse(BaseModel):
+    id: UUID
+    name: str
+    additional_price: Decimal
+    display_order: int
+
+
+class MenuOptionGroupResponse(BaseModel):
+    id: UUID
+    name: str
+    description: str | None
+    is_required: bool
+    min_selections: int
+    max_selections: int
+    display_order: int
+    options: list[MenuOptionResponse]
+
+
+class MenuItemMenuResponse(BaseModel):
+    id: UUID
+    category_id: UUID | None
+    name: str
+    description: str | None
+    sku: str | None
+    price: Decimal
+    status: MenuItemStatus
+    image_path: str | None
+    display_order: int
+    option_groups: list[MenuOptionGroupResponse]
+
+
+class CategoryMenuResponse(BaseModel):
+    id: UUID
+    name: str
+    description: str | None
+    display_order: int
+    items: list[MenuItemMenuResponse]
+
+
+class MenuResponse(BaseModel):
+    categories: list[CategoryMenuResponse]
