@@ -2,6 +2,9 @@ from os import getenv
 from dotenv import load_dotenv
 from pathlib import Path
 import jwt
+from fastapi import Header, HTTPException, status
+
+
 
 BASE_DIR =  Path(__file__).resolve().parent
 
@@ -41,3 +44,18 @@ def v_and_d(token:str):
     if payload.get('type')!="access":
         raise ValueError("this token is invalid")
     return payload
+
+
+
+
+def verify_internal_service(
+    x_service_key: str = Header(...)
+):
+    INTERNAL_API_SECRET = getenv("INTERNAL_API_SECRET")
+    if x_service_key != INTERNAL_API_SECRET:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid service credentials.",
+        )
+
+    return True

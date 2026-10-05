@@ -1,7 +1,22 @@
 from fastapi import APIRouter, status, HTTPException,Depends
-from .models import (Category,MenuItem,MenuItemOptionGroup,MenuItemStatus,Option,OptionGroup)
 from .database import SessionDep
-from .schema import MenuResponse, CategoryResponse,CategoryCreate,CategoryUpdate, MenuItemResponse, MenuItemCreate,MenuItemUpdate,OptionGroupResponse,OptionGroupCreate,OptionGroupUpdate,OptionCreate,OptionResponse,OptionUpdate,MenuItemOptionGroupCreate,MenuItemOptionGroupResponse,MenuItemOptionGroupUpdate
+from .schema import (MenuResponse,
+                    CategoryResponse,
+                    CategoryCreate,
+                    CategoryUpdate,
+                    MenuItemResponse,
+                    MenuItemCreate,
+                    MenuItemUpdate,
+                    OptionGroupResponse,
+                    OptionGroupCreate,
+                    OptionGroupUpdate,
+                    OptionCreate,
+                    OptionResponse,
+                    OptionUpdate,
+                    MenuItemOptionGroupCreate,
+                    MenuItemOptionGroupResponse,MenuItemOptionGroupUpdate,
+                    MenuValidationRequest,
+                    MenuValidationResponse,)
 from .dependencies import require_permission
 from .services.category_service import CategoryService
 from .services.menu_services import MenuService
@@ -10,7 +25,8 @@ from .services.option_group_service import OptionGroupService
 from .services.option_service import OptionService
 from .services.menu_item_option_service import MenuItemOptionGroupService
 from .services.pos_menu_service import MenuReadService
-
+from .services.validate_menu_service import validate_menu
+from .utils import verify_internal_service
 
 # since the routes are not meaty i'll write them all in one file. if they later explode then i'll consider splitting them
 router = APIRouter(tags=["Menu Service"])
@@ -310,3 +326,18 @@ def get_menu(
         session,
         current_user["restaurant_id"]
     )
+
+
+
+
+@router.post("/menu/validate", response_model=MenuValidationResponse)
+def validate_menu_endpoint(request: MenuValidationRequest,session: SessionDep,
+    _: bool = Depends(verify_internal_service),
+):
+
+    return validate_menu(
+        session=session,
+        restaurant_id=request.restaurant_id,
+        request=request,
+    )
+

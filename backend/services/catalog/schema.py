@@ -185,3 +185,34 @@ class CategoryMenuResponse(BaseModel):
 
 class MenuResponse(BaseModel):
     categories: list[CategoryMenuResponse]
+
+
+
+
+class MenuValidationItem(BaseModel):
+    menu_item_id: UUID
+    quantity: int
+    option_ids: list[UUID] = []
+
+
+class MenuValidationRequest(BaseModel):
+    items: list[MenuValidationItem]
+    restaurant_id: UUID
+
+
+class ValidatedOption(BaseModel):
+    option_id: UUID
+    name: str
+    additional_price: Decimal
+
+
+class ValidatedMenuItem(BaseModel):
+    menu_item_id: UUID
+    name: str
+    price: Decimal
+    quantity: int
+    options: list[ValidatedOption]
+
+
+class MenuValidationResponse(BaseModel):
+    items: list[ValidatedMenuItem]
