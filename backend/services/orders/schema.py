@@ -82,3 +82,17 @@ class CatalogValidatedItem(BaseModel):
 
 class CatalogValidationResponse(BaseModel):
     items: list[CatalogValidatedItem]
+
+
+class OrderListResponse(BaseModel):
+    id: UUID
+    order_number: int
+    order_type: OrderType
+    status: OrderStatus
+    subtotal: Decimal
+    discount: Decimal
+    tax: Decimal
+    total: Decimal
+    notes: str | None
+    created_at: datetime
+    updated_at: datetime

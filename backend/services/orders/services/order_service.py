@@ -14,6 +14,7 @@ from ..schema import (
     OrderItemOptionResponse,
     CatalogValidationRequest,
     CatalogValidationItem,
+    OrderListResponse
 )
 from ..catalog_client import validate_with_catalog
 
@@ -21,11 +22,7 @@ from ..catalog_client import validate_with_catalog
 class OrderService:
 
     @staticmethod
-    def create_order(
-        session: Session,
-        data: OrderCreate,
-        restaurant_id: UUID,
-    ):
+    def create_order(session: Session,data: OrderCreate,restaurant_id: UUID,):
 
         if not data.items:
             raise ValueError("Order must contain at least one item.")
@@ -191,3 +188,70 @@ class OrderService:
         except Exception:
             session.rollback()
             raise
+
+    @staticmethod
+    def get_orders(session:Session, restaurant_id:UUID):
+
+        orders = session.exec(
+            select(Order).where(Order.restaurant_id==restaurant_id,).order_by(Order.created_at.desc())
+        ).all()
+        return orders
+
+    @staticmethod
+    def get_order(pk:UUID, session:Session, restaurant_id: UUID):
+        order = session.exec(
+            select(Order).where(Order.id ==pk)
+        ).first()
+
+        if not order:
+            raise ValueError("there's no order existing")
+
+        items = session.exec(
+            select(OrderItem).where(OrderItem.order_id ==order.id)
+        ).all()
+
+        item_ids = [item.id for item in items]
+
+        item_options = session.exec(
+            select(OrderItemOption).where(OrderItemOption.order_item_id.in_(item_ids))
+        ).all()
+
+        options_by_item = {}
+
+        for option in item_options:
+            options_by_item.setdefault(option.order_item_id, []).append(option)
+
+        response_items = []
+
+        for item in items:
+            item_options = options_by_item.get(item.id, [])
+
+            response_items.append(
+                OrderItemResponse(
+                    id=item.id,
+                menu_item_id=item.menu_item_id,
+                name=item.name,
+                unit_price=item.unit_price,
+                quantity=item.quantity,
+                subtotal=item.subtotal,
+                notes=item.notes,
+                status=item.status,
+                options=[
+                    OrderItemOptionResponse(
+                        id=option.id,
+                        option_id=option.option_id,
+                        name=option.name,
+                        additional_price=option.additional_price,
+                        quantity=option.quantity,
+                    )
+                    for option in item_options
+                ],
+            )
+        )
+        
+            
+
+
+
+
+

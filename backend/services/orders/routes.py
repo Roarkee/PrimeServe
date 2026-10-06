@@ -7,7 +7,9 @@ from .schema import (OrderCreate,
                      OrderItemResponse,
                      OrderItemOptionResponse,
                      CatalogValidationResponse,
-                     CatalogValidationRequest)
+                     CatalogValidationRequest,
+                     OrderListResponse
+                     )
 
 from .database import SessionDep
 from .dependencies import require_permission
@@ -17,3 +19,9 @@ router = APIRouter(tags=["Order Service"])
 @router.post("/order/create", response_model=OrderResponse)
 def create_order(session:SessionDep, data:OrderCreate, user=Depends(require_permission("order:create"))):
     return OrderService.create_order(session, data, user["restaurant_id"])
+
+@router.get("/order", 
+            response_model=OrderListResponse
+            )
+def get_orders(session:SessionDep, user=Depends(require_permission("order:create"))):
+    return OrderService.get_orders(session, user["restaurant_id"])
