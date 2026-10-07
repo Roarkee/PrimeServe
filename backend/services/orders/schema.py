@@ -2,7 +2,7 @@ from decimal import Decimal
 from uuid import UUID
 
 from pydantic import BaseModel, Field
-from .models import OrderType,OrderStatus
+from .models import OrderType,OrderStatus,OrderItemStatus
 from datetime import datetime
 
 
@@ -36,7 +36,7 @@ class OrderItemResponse(BaseModel):
     quantity: int
     subtotal: Decimal
     notes: str | None
-    status: OrderStatus
+    status: OrderItemStatus
     options: list[OrderItemOptionResponse]
 
 
@@ -96,3 +96,16 @@ class OrderListResponse(BaseModel):
     notes: str | None
     created_at: datetime
     updated_at: datetime
+
+
+class OrderUpdate(BaseModel):
+    status: OrderStatus | None = None
+    order_type: OrderType | None = None
+    notes: str | None = None
+
+class PaginatedOrderResponse(BaseModel):
+    items: list[OrderListResponse]
+    total: int
+    page: int
+    page_size: int
+    total_pages: int

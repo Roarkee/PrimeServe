@@ -6,7 +6,7 @@ from zoneinfo import ZoneInfo
 from sqlmodel import Session, select
 
 from ..utils import generate_order_number
-from ..models import OrderStatus, Order, OrderItem, OrderItemOption
+from ..models import OrderStatus, Order, OrderItem, OrderItemOption,OrderItemStatus,OrderType
 from ..schema import (
     OrderCreate,
     OrderResponse,
@@ -14,18 +14,28 @@ from ..schema import (
     OrderItemOptionResponse,
     CatalogValidationRequest,
     CatalogValidationItem,
-    OrderListResponse
+    OrderListResponse,
+    OrderUpdate
 )
 from ..catalog_client import validate_with_catalog
+from .order_pricing import OrderPricingService
+from math import ceil
+
+from sqlalchemy import func
+from sqlmodel import select
+
 
 
 class OrderService:
 
     @staticmethod
     def create_order(session: Session,data: OrderCreate,restaurant_id: UUID,):
+         
 
         if not data.items:
             raise ValueError("Order must contain at least one item.")
+
+        pricing_service = OrderPricingService()
 
         catalog_request = CatalogValidationRequest(
             restaurant_id=restaurant_id,
@@ -41,32 +51,68 @@ class OrderService:
 
         validated_menu = validate_with_catalog(catalog_request)
 
-        subtotal = Decimal("0.00")
+        calculated_items = []
+        item_subtotals = []
 
-        for item in validated_menu.items:
-            options_total = sum(
-                (
-                    option.additional_price
-                    for option in item.options
-                ),
-                Decimal("0.00"),
+        for request_item, validated_item in zip(
+            data.items,
+            validated_menu.items,
+        ):
+            options_total = pricing_service.calculate_options_total(
+                validated_item.options
             )
 
-            item_subtotal = (
-                item.price + options_total
-            ) * item.quantity
+            item_subtotal = pricing_service.calculate_item_subtotal(
+                unit_price=validated_item.price,
+                quantity=validated_item.quantity,
+                options_price=options_total,
+            )
 
-            subtotal += item_subtotal
+            calculated_items.append(
+                {
+                    "request_item": request_item,
+                    "validated_item": validated_item,
+                    "options_total": options_total,
+                    "item_subtotal": item_subtotal,
+                }
+            )
 
-        discount = Decimal("0.00")
-        tax = Decimal("0.00")
-        total = subtotal - discount + tax
+            item_subtotals.append(item_subtotal)
+
+        subtotal = pricing_service.calculate_subtotal(
+            item_subtotals
+        )
+        discount_type = "fixed"
+        discount_value = Decimal("0.00")
+
+        discount = pricing_service.calculate_discount(
+            subtotal=subtotal,
+            discount_type=discount_type,
+            discount_value=discount_value,
+        )
+
+        tax_rate = Decimal("0.00")
+
+        taxable_amount = subtotal - discount
+
+        tax = pricing_service.calculate_tax(
+            taxable_amount=taxable_amount,
+            tax_rate=tax_rate,
+        )
+
+
+        total = pricing_service.calculate_total(
+            subtotal=subtotal,
+            discount=discount,
+            tax=tax,
+        )
 
         counter_date = datetime.now(
             ZoneInfo("Africa/Accra")
         ).date()
 
         try:
+
             order_number = generate_order_number(
                 session=session,
                 restaurant_id=restaurant_id,
@@ -88,21 +134,11 @@ class OrderService:
             session.add(order)
             session.flush()
 
-            for request_item, validated_item in zip(
-                data.items,
-                validated_menu.items,
-            ):
-                options_total = sum(
-                    (
-                        option.additional_price
-                        for option in validated_item.options
-                    ),
-                    Decimal("0.00"),
-                )
+            for calculated in calculated_items:
 
-                item_subtotal = (
-                    validated_item.price + options_total
-                ) * validated_item.quantity
+                request_item = calculated["request_item"]
+                validated_item = calculated["validated_item"]
+                item_subtotal = calculated["item_subtotal"]
 
                 order_item = OrderItem(
                     order_id=order.id,
@@ -112,12 +148,14 @@ class OrderService:
                     quantity=validated_item.quantity,
                     subtotal=item_subtotal,
                     notes=request_item.notes,
+                    status=OrderItemStatus.PENDING,
                 )
 
                 session.add(order_item)
                 session.flush()
 
                 for option in validated_item.options:
+
                     order_item_option = OrderItemOption(
                         order_item_id=order_item.id,
                         option_id=option.option_id,
@@ -137,14 +175,33 @@ class OrderService:
                 )
             ).all()
 
+            item_ids = [item.id for item in items]
+
+            item_options = []
+
+            if item_ids:
+                item_options = session.exec(
+                    select(OrderItemOption).where(
+                        OrderItemOption.order_item_id.in_(item_ids)
+                    )
+                ).all()
+
+            options_by_item = {}
+
+            for option in item_options:
+                options_by_item.setdefault(
+                    option.order_item_id,
+                    []
+                ).append(option)
+
             response_items = []
 
             for item in items:
-                options = session.exec(
-                    select(OrderItemOption).where(
-                        OrderItemOption.order_item_id == item.id
-                    )
-                ).all()
+
+                options = options_by_item.get(
+                    item.id,
+                    []
+                )
 
                 response_items.append(
                     OrderItemResponse(
@@ -189,18 +246,57 @@ class OrderService:
             session.rollback()
             raise
 
+
+
     @staticmethod
-    def get_orders(session:Session, restaurant_id:UUID):
+    def get_orders(session: Session,restaurant_id: UUID,status: OrderStatus|None=None,order_type: OrderType|None=None,
+        page: int = 1,
+        page_size: int = 20,
+    ):
+        if page < 1:
+            raise ValueError("Page must be greater than 0.")
 
-        orders = session.exec(
-            select(Order).where(Order.restaurant_id==restaurant_id,).order_by(Order.created_at.desc())
-        ).all()
-        return orders
+        if page_size < 1:
+            raise ValueError("Page size must be greater than 0.")
 
+        if page_size > 100:
+            raise ValueError("Page size cannot exceed 100.")
+
+        query = select(Order).where(Order.restaurant_id == restaurant_id)
+
+        if status is not None:
+            query = query.where(Order.status == status)
+
+        if order_type is not None:
+            query = query.where(Order.order_type == order_type)
+
+        count_query = select(func.count()).select_from(Order).where(Order.restaurant_id == restaurant_id)
+
+        if status is not None:
+            count_query = count_query.where(Order.status == status)
+
+        if order_type is not None:
+            count_query = count_query.where(Order.order_type == order_type)
+
+        total = session.exec(count_query).one()
+
+        offset = (page - 1) * page_size
+
+        orders = session.exec(query.order_by(Order.created_at.desc()).offset(offset).limit(page_size)).all()
+
+        total_pages = ceil(total / page_size) if total > 0 else 0
+        
+        return {
+            "items": orders,
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+            "total_pages": total_pages,
+        }
     @staticmethod
     def get_order(pk:UUID, session:Session, restaurant_id: UUID):
         order = session.exec(
-            select(Order).where(Order.id ==pk)
+            select(Order).where(Order.id ==pk, Order.restaurant_id == restaurant_id)
         ).first()
 
         if not order:
@@ -248,8 +344,43 @@ class OrderService:
                 ],
             )
         )
+
+        return OrderResponse(
+            id=order.id,
+            order_number=order.order_number,
+            order_type=order.order_type,
+            status=order.status,
+            subtotal=order.subtotal,
+            discount=order.discount,
+            tax=order.tax,
+            total=order.total,
+            notes=order.notes,
+            items=response_items,
+            created_at=order.created_at,
+            updated_at=order.updated_at,
+    )
         
-            
+
+    @staticmethod  
+    def update_order(pk:UUID,session:Session, restaurant_id: UUID, data:OrderUpdate):
+        order = session.exec(
+            select(Order).where(Order.id ==pk, Order.restaurant_id == restaurant_id)
+        ).first()
+
+        if not order:
+            raise ValueError("There's no order with this ID.")
+
+        updates = data.model_dump(exclude_unset=True)  
+
+        for field, value in updates.items():
+            setattr(order,field, value)
+
+        session.add(order)
+        session.commit()
+        session.refresh(order)
+        return order
+
+
 
 
 
