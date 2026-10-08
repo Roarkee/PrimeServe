@@ -1,6 +1,6 @@
 from sqlmodel import select, Session
 from ..models import Category
-from ..schema import CategoryCreate,CategoryUpdate,CategoryReorder,CategoryResponse
+from ..schemas.management_schema import CategoryCreate,CategoryUpdate,CategoryReorder,CategoryResponse
 from uuid import UUID
 
 class CategoryService:

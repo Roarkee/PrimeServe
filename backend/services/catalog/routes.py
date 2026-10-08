@@ -1,6 +1,6 @@
 from fastapi import APIRouter, status, HTTPException,Depends
 from .database import SessionDep
-from .schema import (MenuResponse,
+from .schemas.management_schema import (MenuResponse,
                     CategoryResponse,
                     CategoryCreate,
                     CategoryUpdate,
@@ -16,7 +16,10 @@ from .schema import (MenuResponse,
                     MenuItemOptionGroupCreate,
                     MenuItemOptionGroupResponse,MenuItemOptionGroupUpdate,
                     MenuValidationRequest,
-                    MenuValidationResponse,)
+                    MenuValidationResponse,
+                    MenuItemMenuResponse)
+
+from .schemas.pos_schema import MenuCreate
 from .dependencies import require_permission
 from .services.category_service import CategoryService
 from .services.menu_services import MenuService
@@ -326,6 +329,10 @@ def get_menu(
         session,
         current_user["restaurant_id"]
     )
+
+@router.post("/create_one_menu", response_model=MenuItemMenuResponse)
+def create_one_menu(session:SessionDep,data:MenuCreate, current_user=Depends(require_permission("catalog:create"))):
+    return MenuReadService.create_menu(session,data, current_user["restaurant_id"])
 
 
 

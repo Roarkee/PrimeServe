@@ -3,7 +3,7 @@ from uuid import UUID
 from pydantic import BaseModel,Field
 from datetime import datetime
 from decimal import Decimal
-from .models import MenuItemStatus
+from ..models import MenuItemStatus
 
 class CategoryCreate(BaseModel):
     name: str
@@ -216,3 +216,20 @@ class ValidatedMenuItem(BaseModel):
 
 class MenuValidationResponse(BaseModel):
     items: list[ValidatedMenuItem]
+
+
+
+
+
+
+
+
+
+class MenuCreate(BaseModel):
+    category: CategoryCreate
+    menu_item: MenuItemCreate
+    options: OptionCreate|None = None
+    options_group: OptionGroupCreate|None = None
+    menu_item_group_option: MenuItemOptionGroupCreate
+
+    pass

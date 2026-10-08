@@ -1,4 +1,4 @@
-from ..schema import MenuItemCreate,MenuItemResponse,MenuItemUpdate
+from ..schemas.management_schema import MenuItemCreate,MenuItemResponse,MenuItemUpdate
 from ..models import MenuItem,Category
 from sqlmodel import select,Session
 from uuid import UUID

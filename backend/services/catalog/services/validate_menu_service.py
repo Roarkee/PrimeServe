@@ -9,7 +9,7 @@ from ..models import (
     Option,
     MenuItemStatus,
 )
-from ..schema import (
+from ..schemas.management_schema import (
     MenuValidationRequest,
     MenuValidationResponse,
     ValidatedMenuItem,

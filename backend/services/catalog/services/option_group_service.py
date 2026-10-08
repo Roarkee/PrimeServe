@@ -3,7 +3,7 @@ from uuid import UUID
 from sqlmodel import Session, select
 
 from ..models import OptionGroup
-from ..schema import OptionGroupCreate, OptionGroupUpdate
+from ..schemas.management_schema import OptionGroupCreate, OptionGroupUpdate
 
 
 class OptionGroupService:
