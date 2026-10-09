@@ -326,7 +326,7 @@ def get_menu(
     current_user=Depends(require_permission("catalog:view"))
 ):
 
-    return MenuResponse(categories=[])
+    # return MenuResponse(categories=[])
     return MenuReadService.get_menu(
         session,
         current_user["restaurant_id"]
