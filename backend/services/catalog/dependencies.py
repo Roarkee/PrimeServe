@@ -25,7 +25,7 @@ def get_current_user(
 
 def require_permission(permission:str):
     def dependency(current_user=Depends(get_current_user)):
-        if permission not in current_user.get("permissions"):
+        if permission not in current_user.get("permissions",[]):
             raise HTTPException(
                 status_code=403,
                 detail="Permission denied"

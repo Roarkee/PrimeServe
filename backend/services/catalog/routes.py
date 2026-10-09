@@ -38,7 +38,7 @@ router = APIRouter(tags=["Menu Service"])
 def create_category(session:SessionDep, category_data: CategoryCreate, current_user=Depends(require_permission("catalog:create"))):
     return CategoryService.create_category(session, current_user["restaurant_id"], category_data)
 
-@router.post("/categories/{pk}")
+@router.patch("/categories/{pk}")
 def update_category(pk:UUID, session:SessionDep, category_data: CategoryUpdate, current_user=Depends(require_permission("catalog:update"))):
     return CategoryService.update_category(pk, category_data, session, current_user["restaurant_id"])
 
@@ -47,8 +47,8 @@ def get_categories(session: SessionDep, current_user= Depends(require_permission
     return CategoryService.get_categories(session, current_user["restaurant_id"])
 
 
-@router.get("/categories/{pk}", response_model=CategoryResponse)
-def get_categories(pk:UUID, session: SessionDep, current_user= Depends(require_permission("catalog:view"))):
+@router.get("/category/{pk}", response_model=CategoryResponse)
+def get_category(pk:UUID, session: SessionDep, current_user= Depends(require_permission("catalog:view"))):
     return CategoryService.get_category(pk, session, current_user["restaurant_id"])
 
 @router.get("/menus/{pk}", response_model=MenuItemResponse)
@@ -56,7 +56,7 @@ def get_menu_item(pk:UUID, session:SessionDep, current_user =Depends(require_per
     return MenuService.get_menu(pk,session,current_user["restaurant_id"])
 
 @router.get("/menus", response_model=list[MenuItemResponse])
-def get_menu_item(session:SessionDep, current_user =Depends(require_permission("catalog:view"))):
+def get_menu_items(session:SessionDep, current_user =Depends(require_permission("catalog:view"))):
     return MenuService.get_menus(session,current_user["restaurant_id"])
 
 @router.post("/menus", response_model=MenuItemResponse)
@@ -68,7 +68,7 @@ def update_menu_item(pk,menu_data:MenuItemUpdate, session:SessionDep, current_us
     return MenuService.update_menu_item(pk,menu_data, session, current_user["restaurant_id"])
 
 
-@router.delete("menus/{pk}")
+@router.delete("/menus/{pk}")
 def delete_menu(pk:UUID,session:SessionDep,current_user=Depends(require_permission("catalog:delete"))):
     return MenuService.delete_menu(pk, session, current_user["restaurant_id"])
 
@@ -325,13 +325,15 @@ def get_menu(
     session: SessionDep,
     current_user=Depends(require_permission("catalog:view"))
 ):
+
+    return MenuResponse(categories=[])
     return MenuReadService.get_menu(
         session,
         current_user["restaurant_id"]
     )
 
 @router.post("/create_one_menu", response_model=MenuItemMenuResponse)
-def create_one_menu(session:SessionDep,data:MenuCreate, current_user=Depends(require_permission("catalog:create"))):
+def create_menu(session:SessionDep,data:MenuCreate, current_user=Depends(require_permission("catalog:create"))):
     return MenuReadService.create_menu(session,data, current_user["restaurant_id"])
 
 
@@ -347,4 +349,157 @@ def validate_menu_endpoint(request: MenuValidationRequest,session: SessionDep,
         restaurant_id=request.restaurant_id,
         request=request,
     )
+
+
+
+
+
+from sqlalchemy import text
+import time
+
+# @router.get("/db-test")
+# def db_test(session: SessionDep):
+#     times = []
+
+#     for _ in range(5):
+#         start = time.perf_counter()
+
+#         session.exec(text("SELECT 1")).first()
+
+#         times.append(time.perf_counter() - start)
+
+#     return {"times": times}
+
+@router.get("/db-test")
+def db_test():
+    from sqlalchemy import text
+    from sqlmodel import Session
+    from .database import engine
+    import time
+
+    times = []
+
+    for _ in range(5):
+        start = time.perf_counter()
+
+        with Session(engine) as session:
+            session.exec(text("SELECT 1")).first()
+
+        times.append(time.perf_counter() - start)
+
+    return {"times": times}
+
+# Adjust to your actual import
+
+
+@router.get("/db-diagnostic")
+def db_diagnostic():
+
+
+
+    from sqlalchemy import text
+    from sqlmodel import Session
+    import time
+    from .database import engine
+
+    def measure_query_latency(engine):
+       
+        results = []
+
+        with Session(engine) as session:
+            session.connection()
+
+            for _ in range(10):
+                start = time.perf_counter()
+
+                row = session.exec(text("""
+                    SELECT
+                        EXTRACT(
+                            EPOCH FROM
+                            (clock_timestamp() - statement_timestamp())
+                        ) * 1000 AS server_elapsed_ms,
+                        pg_sleep(0.01)
+                """)).first()
+
+                client_elapsed_ms = (
+                    time.perf_counter() - start
+                ) * 1000
+
+                results.append({
+                    "server_elapsed_ms": round(
+                        float(row[0] or 0), 3
+                    ),
+                    "client_elapsed_ms": round(
+                        client_elapsed_ms, 2
+                    ),
+                })
+
+        return results
+    return measure_query_latency(engine)
+
+    
+    import time
+    from sqlalchemy import text
+    from sqlmodel import Session
+
+    from .database import engine  
+    with Session(engine) as session:
+        start = time.perf_counter()
+        session.connection()
+        checkout_ms = (time.perf_counter() - start) * 1000
+
+        query_times = []
+
+        for _ in range(5):
+            start = time.perf_counter()
+            session.exec(text("SELECT 1")).first()
+            query_times.append(round((time.perf_counter() - start) * 1000, 2))
+
+    return {
+        "connection_checkout_ms": round(checkout_ms, 2),
+        "select_1_times_ms": query_times,
+    }
+
+
+
+
+
+
+@router.get("/db-roundtrip-diagnostic")
+def db_diagnostic_roundtrip(
+    current_user=Depends(require_permission("catalog:view")),
+):
+    from sqlmodel import Session
+    from .database import engine
+
+    results = []
+
+    with Session(engine) as session:
+        # Measure obtaining a database connection.
+        start = time.perf_counter()
+        session.connection()
+        checkout_ms = (time.perf_counter() - start) * 1000
+
+        # Separate the first query from repeated queries.
+        start = time.perf_counter()
+        session.exec(text("SELECT 1")).first()
+        warmup_ms = (time.perf_counter() - start) * 1000
+
+        # Reuse the same checked-out connection.
+        for i in range(10):
+            start = time.perf_counter()
+            session.exec(text("SELECT 1")).first()
+            elapsed_ms = (time.perf_counter() - start) * 1000
+
+            results.append({
+                "query": i + 1,
+                "client_elapsed_ms": round(elapsed_ms, 2),
+            })
+
+    return {
+        "connection_checkout_ms": round(checkout_ms, 2),
+        "warmup_query_ms": round(warmup_ms, 2),
+        "repeated_queries": results,
+    }
+
 

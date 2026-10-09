@@ -8,7 +8,7 @@ class NotFoundError(ServiceError):
     pass
 
 
-class ValidationError(ServiceError):
+class BusinessValidationError(ServiceError):
     """Raised when business validation fails."""
     pass
 

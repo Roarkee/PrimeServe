@@ -1,3 +1,4 @@
+import logging
 from uuid import UUID
 
 from sqlmodel import Session, select
@@ -20,10 +21,23 @@ from ..schemas.management_schema import (
 )
 
 from ..schemas.pos_schema import MenuCreate
-from ..exceptions import CategoryAlreadyExistsError,CategoryNotFoundError,ValidationError
+from ..exceptions import CategoryAlreadyExistsError,CategoryNotFoundError,BusinessValidationError
+import json
+
+import time
+
+from collections import OrderedDict
+from sqlalchemy import and_
+
+
+logger = logging.getLogger(__name__)
 
 
 class MenuReadService:
+
+    
+
+
 
     @staticmethod
     def get_menu(
@@ -31,6 +45,170 @@ class MenuReadService:
         restaurant_id: UUID
     ) -> MenuResponse:
 
+        statement = (
+            select(
+                Category,
+                MenuItem,
+                MenuItemOptionGroup,
+                OptionGroup,
+                Option,
+            )
+            .select_from(Category)
+            .outerjoin(
+                MenuItem,
+                and_(
+                    MenuItem.category_id == Category.id,
+                    MenuItem.restaurant_id == restaurant_id,
+                    MenuItem.status == MenuItemStatus.ACTIVE,
+                ),
+            )
+            .outerjoin(
+                MenuItemOptionGroup,
+                MenuItemOptionGroup.menu_item_id == MenuItem.id,
+            )
+            .outerjoin(
+                OptionGroup,
+                and_(
+                    OptionGroup.id
+                    == MenuItemOptionGroup.option_group_id,
+                    OptionGroup.restaurant_id == restaurant_id,
+                    OptionGroup.is_active.is_(True),
+                ),
+            )
+            .outerjoin(
+                Option,
+                and_(
+                    Option.option_group_id == OptionGroup.id,
+                    Option.is_active.is_(True),
+                ),
+            )
+            .where(
+                Category.restaurant_id == restaurant_id,
+                Category.is_active.is_(True),
+            )
+            .order_by(
+                Category.display_order,
+                MenuItem.display_order,
+                MenuItemOptionGroup.display_order,
+                Option.display_order,
+            )
+        )
+
+        rows = session.exec(statement).all()
+
+        # Ordered dictionaries preserve the database display order.
+        categories_by_id = OrderedDict()
+
+        for category, item, relationship, group, option in rows:
+
+            if category.id not in categories_by_id:
+                categories_by_id[category.id] = {
+                    "category": category,
+                    "items": OrderedDict(),
+                }
+
+            # Empty categories are retained.
+            if item is None:
+                continue
+
+            items = categories_by_id[category.id]["items"]
+
+            if item.id not in items:
+                items[item.id] = {
+                    "item": item,
+                    "groups": OrderedDict(),
+                }
+
+            # Items without option groups are retained.
+            if relationship is None or group is None:
+                continue
+
+            groups = items[item.id]["groups"]
+
+            if group.id not in groups:
+                groups[group.id] = {
+                    "group": group,
+                    "display_order": relationship.display_order,
+                    "options": OrderedDict(),
+                }
+
+            # Groups without active options are retained.
+            if option is not None:
+                groups[group.id]["options"].setdefault(
+                    option.id,
+                    option,
+                )
+
+        category_responses = []
+
+        for category_data in categories_by_id.values():
+            category = category_data["category"]
+            item_responses = []
+
+            for item_data in category_data["items"].values():
+                item = item_data["item"]
+                group_responses = []
+
+                for group_data in item_data["groups"].values():
+                    group = group_data["group"]
+
+                    option_responses = [
+                        MenuOptionResponse(
+                            id=option.id,
+                            name=option.name,
+                            additional_price=option.additional_price,
+                            display_order=option.display_order,
+                        )
+                        for option in group_data["options"].values()
+                    ]
+
+                    group_responses.append(
+                        MenuOptionGroupResponse(
+                            id=group.id,
+                            name=group.name,
+                            description=group.description,
+                            is_required=group.is_required,
+                            min_selections=group.min_selections,
+                            max_selections=group.max_selections,
+                            display_order=group_data["display_order"],
+                            options=option_responses,
+                        )
+                    )
+
+                item_responses.append(
+                    MenuItemMenuResponse(
+                        id=item.id,
+                        category_id=item.category_id,
+                        name=item.name,
+                        description=item.description,
+                        sku=item.sku,
+                        price=item.price,
+                        status=item.status,
+                        image_path=item.image_path,
+                        display_order=item.display_order,
+                        option_groups=group_responses,
+                    )
+                )
+
+            category_responses.append(
+                CategoryMenuResponse(
+                    id=category.id,
+                    name=category.name,
+                    description=category.description,
+                    display_order=category.display_order,
+                    items=item_responses,
+                )
+            )
+
+        return MenuResponse(categories=category_responses)
+
+    @staticmethod
+    def get_menu(session: Session, restaurant_id: UUID) -> MenuResponse:
+        request_start = time.perf_counter()
+        timings = {}
+
+        # 1. Fetch categories
+        start = time.perf_counter()
         categories = session.exec(
             select(Category)
             .where(
@@ -39,7 +217,10 @@ class MenuReadService:
             )
             .order_by(Category.display_order)
         ).all()
+        timings["categories_ms"] = round((time.perf_counter() - start) * 1000, 2)
 
+        # 2. Fetch active menu items
+        start = time.perf_counter()
         menu_items = session.exec(
             select(MenuItem)
             .where(
@@ -48,24 +229,24 @@ class MenuReadService:
             )
             .order_by(MenuItem.display_order)
         ).all()
+        timings["menu_items_ms"] = round((time.perf_counter() - start) * 1000, 2)
 
+        # 3. Fetch menu-item/option-group relationships
+        start = time.perf_counter()
         relationships = session.exec(
             select(MenuItemOptionGroup)
-            .join(
-                MenuItem,
-                MenuItemOptionGroup.menu_item_id == MenuItem.id
-            )
-            .join(
-                OptionGroup,
-                MenuItemOptionGroup.option_group_id == OptionGroup.id
-            )
+            .join(MenuItem, MenuItemOptionGroup.menu_item_id == MenuItem.id)
+            .join(OptionGroup, MenuItemOptionGroup.option_group_id == OptionGroup.id)
             .where(
                 MenuItem.restaurant_id == restaurant_id,
                 OptionGroup.is_active == True
             )
             .order_by(MenuItemOptionGroup.display_order)
         ).all()
+        timings["relationships_ms"] = round((time.perf_counter() - start) * 1000, 2)
 
+        # 4. Fetch active option groups
+        start = time.perf_counter()
         option_groups = session.exec(
             select(OptionGroup)
             .where(
@@ -74,65 +255,58 @@ class MenuReadService:
             )
             .order_by(OptionGroup.display_order)
         ).all()
+        timings["option_groups_ms"] = round((time.perf_counter() - start) * 1000, 2)
 
+        # 5. Fetch active options
+        start = time.perf_counter()
         options = session.exec(
             select(Option)
-            .join(
-                OptionGroup,
-                Option.option_group_id == OptionGroup.id
-            )
+            .join(OptionGroup, Option.option_group_id == OptionGroup.id)
             .where(
                 OptionGroup.restaurant_id == restaurant_id,
                 Option.is_active == True
             )
             .order_by(Option.display_order)
         ).all()
+        timings["options_ms"] = round((time.perf_counter() - start) * 1000, 2)
+
+        timings["db_total_ms"] = round(sum((
+            timings["categories_ms"],
+            timings["menu_items_ms"],
+            timings["relationships_ms"],
+            timings["option_groups_ms"],
+            timings["options_ms"],
+        )), 2)
+
+        # 6. Build lookup dictionaries
+        assembly_start = time.perf_counter()
 
         items_by_category: dict[UUID, list[MenuItem]] = {}
-
         for item in menu_items:
             if item.category_id is not None:
-                items_by_category.setdefault(
-                    item.category_id,
-                    []
-                ).append(item)
+                items_by_category.setdefault(item.category_id, []).append(item)
 
         groups_by_item: dict[UUID, list[MenuItemOptionGroup]] = {}
-
         for relationship in relationships:
-            groups_by_item.setdefault(
-                relationship.menu_item_id,
-                []
-            ).append(relationship)
+            groups_by_item.setdefault(relationship.menu_item_id, []).append(relationship)
 
-        option_groups_by_id = {
-            group.id: group
-            for group in option_groups
-        }
+        option_groups_by_id = {group.id: group for group in option_groups}
 
         options_by_group: dict[UUID, list[Option]] = {}
-
         for option in options:
-            options_by_group.setdefault(
-                option.option_group_id,
-                []
-            ).append(option)
+            options_by_group.setdefault(option.option_group_id, []).append(option)
 
+        # 7. Build nested response
         category_responses = []
 
         for category in categories:
-
             item_responses = []
 
             for item in items_by_category.get(category.id, []):
-
                 group_responses = []
 
                 for relationship in groups_by_item.get(item.id, []):
-
-                    group = option_groups_by_id.get(
-                        relationship.option_group_id
-                    )
+                    group = option_groups_by_id.get(relationship.option_group_id)
 
                     if group is None:
                         continue
@@ -144,10 +318,7 @@ class MenuReadService:
                             additional_price=option.additional_price,
                             display_order=option.display_order
                         )
-                        for option in options_by_group.get(
-                            group.id,
-                            []
-                        )
+                        for option in options_by_group.get(group.id, [])
                     ]
 
                     group_responses.append(
@@ -188,20 +359,33 @@ class MenuReadService:
                 )
             )
 
-        return MenuResponse(
-            categories=category_responses
-        )
+        timings["assembly_ms"] = round((time.perf_counter() - assembly_start) * 1000, 2)
+
+        response = MenuResponse(categories=category_responses)
+
+        timings["menu_total_ms"] = round((time.perf_counter() - request_start) * 1000, 2)
+        timings["category_count"] = len(categories)
+        timings["menu_item_count"] = len(menu_items)
+        timings["relationship_count"] = len(relationships)
+        timings["option_group_count"] = len(option_groups)
+        timings["option_count"] = len(options)
+
+        logger.info("MENU_TIMING %s", json.dumps(timings))
+
+        return response
+
 
 
 
     @staticmethod
     def create_menu(session: Session,data: MenuCreate,restaurant_id: UUID,):
         if data.category_id and data.category:
-            raise ValidationError("Provide either category_id or category, not both.")
+            raise BusinessValidationError("Provide either category_id or category, not both.")
 
         try:
 
             if data.category_id:
+
                 category = session.exec(
                     select(Category).where(
                         Category.id == data.category_id,
@@ -226,7 +410,7 @@ class MenuReadService:
                 session.flush()
 
             else:
-                raise ValidationError("You must provide either category_id or category.")
+                raise BusinessValidationError("You must provide either category_id or category.")
 
             menu_data = data.menu_item
 

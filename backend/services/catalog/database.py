@@ -11,7 +11,11 @@ load_dotenv(BASE_DIR/".env")
 
 db_url = os.getenv("DB_URL")
 
-engine = create_engine(db_url)
+engine = create_engine(db_url,pool_size=5,
+    max_overflow=5,
+    pool_timeout=30,
+    pool_pre_ping=False,
+    )
 
 def get_session():
     with Session(engine) as session:
