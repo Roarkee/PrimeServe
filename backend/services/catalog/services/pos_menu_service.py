@@ -94,7 +94,23 @@ class MenuReadService:
             )
         )
 
-        rows = session.exec(statement).all()
+        start = time.perf_counter()
+        result = session.exec(statement)
+        execute_ms = (time.perf_counter() - start) * 1000
+
+        start = time.perf_counter()
+        rows = result.all()
+        fetch_ms = (time.perf_counter() - start) * 1000
+
+        logger.info(
+            "MENU_QUERY_TIMING %s",
+            json.dumps({
+                "execute_ms": round(execute_ms, 2),
+                "fetch_ms": round(fetch_ms, 2),
+                "total_db_ms": round(execute_ms + fetch_ms, 2),
+                "row_count": len(rows),
+            }),
+        )
 
         # Ordered dictionaries preserve the database display order.
         categories_by_id = OrderedDict()
@@ -202,177 +218,177 @@ class MenuReadService:
 
         return MenuResponse(categories=category_responses)
 
-    @staticmethod
-    def get_menu(session: Session, restaurant_id: UUID) -> MenuResponse:
-        request_start = time.perf_counter()
-        timings = {}
+    # @staticmethod
+    # def get_menu(session: Session, restaurant_id: UUID) -> MenuResponse:
+    #     request_start = time.perf_counter()
+    #     timings = {}
 
-        # 1. Fetch categories
-        start = time.perf_counter()
-        categories = session.exec(
-            select(Category)
-            .where(
-                Category.restaurant_id == restaurant_id,
-                Category.is_active == True
-            )
-            .order_by(Category.display_order)
-        ).all()
-        timings["categories_ms"] = round((time.perf_counter() - start) * 1000, 2)
+    #     # 1. Fetch categories
+    #     start = time.perf_counter()
+    #     categories = session.exec(
+    #         select(Category)
+    #         .where(
+    #             Category.restaurant_id == restaurant_id,
+    #             Category.is_active == True
+    #         )
+    #         .order_by(Category.display_order)
+    #     ).all()
+    #     timings["categories_ms"] = round((time.perf_counter() - start) * 1000, 2)
 
-        # 2. Fetch active menu items
-        start = time.perf_counter()
-        menu_items = session.exec(
-            select(MenuItem)
-            .where(
-                MenuItem.restaurant_id == restaurant_id,
-                MenuItem.status == MenuItemStatus.ACTIVE
-            )
-            .order_by(MenuItem.display_order)
-        ).all()
-        timings["menu_items_ms"] = round((time.perf_counter() - start) * 1000, 2)
+    #     # 2. Fetch active menu items
+    #     start = time.perf_counter()
+    #     menu_items = session.exec(
+    #         select(MenuItem)
+    #         .where(
+    #             MenuItem.restaurant_id == restaurant_id,
+    #             MenuItem.status == MenuItemStatus.ACTIVE
+    #         )
+    #         .order_by(MenuItem.display_order)
+    #     ).all()
+    #     timings["menu_items_ms"] = round((time.perf_counter() - start) * 1000, 2)
 
-        # 3. Fetch menu-item/option-group relationships
-        start = time.perf_counter()
-        relationships = session.exec(
-            select(MenuItemOptionGroup)
-            .join(MenuItem, MenuItemOptionGroup.menu_item_id == MenuItem.id)
-            .join(OptionGroup, MenuItemOptionGroup.option_group_id == OptionGroup.id)
-            .where(
-                MenuItem.restaurant_id == restaurant_id,
-                OptionGroup.is_active == True
-            )
-            .order_by(MenuItemOptionGroup.display_order)
-        ).all()
-        timings["relationships_ms"] = round((time.perf_counter() - start) * 1000, 2)
+    #     # 3. Fetch menu-item/option-group relationships
+    #     start = time.perf_counter()
+    #     relationships = session.exec(
+    #         select(MenuItemOptionGroup)
+    #         .join(MenuItem, MenuItemOptionGroup.menu_item_id == MenuItem.id)
+    #         .join(OptionGroup, MenuItemOptionGroup.option_group_id == OptionGroup.id)
+    #         .where(
+    #             MenuItem.restaurant_id == restaurant_id,
+    #             OptionGroup.is_active == True
+    #         )
+    #         .order_by(MenuItemOptionGroup.display_order)
+    #     ).all()
+    #     timings["relationships_ms"] = round((time.perf_counter() - start) * 1000, 2)
 
-        # 4. Fetch active option groups
-        start = time.perf_counter()
-        option_groups = session.exec(
-            select(OptionGroup)
-            .where(
-                OptionGroup.restaurant_id == restaurant_id,
-                OptionGroup.is_active == True
-            )
-            .order_by(OptionGroup.display_order)
-        ).all()
-        timings["option_groups_ms"] = round((time.perf_counter() - start) * 1000, 2)
+    #     # 4. Fetch active option groups
+    #     start = time.perf_counter()
+    #     option_groups = session.exec(
+    #         select(OptionGroup)
+    #         .where(
+    #             OptionGroup.restaurant_id == restaurant_id,
+    #             OptionGroup.is_active == True
+    #         )
+    #         .order_by(OptionGroup.display_order)
+    #     ).all()
+    #     timings["option_groups_ms"] = round((time.perf_counter() - start) * 1000, 2)
 
-        # 5. Fetch active options
-        start = time.perf_counter()
-        options = session.exec(
-            select(Option)
-            .join(OptionGroup, Option.option_group_id == OptionGroup.id)
-            .where(
-                OptionGroup.restaurant_id == restaurant_id,
-                Option.is_active == True
-            )
-            .order_by(Option.display_order)
-        ).all()
-        timings["options_ms"] = round((time.perf_counter() - start) * 1000, 2)
+    #     # 5. Fetch active options
+    #     start = time.perf_counter()
+    #     options = session.exec(
+    #         select(Option)
+    #         .join(OptionGroup, Option.option_group_id == OptionGroup.id)
+    #         .where(
+    #             OptionGroup.restaurant_id == restaurant_id,
+    #             Option.is_active == True
+    #         )
+    #         .order_by(Option.display_order)
+    #     ).all()
+    #     timings["options_ms"] = round((time.perf_counter() - start) * 1000, 2)
 
-        timings["db_total_ms"] = round(sum((
-            timings["categories_ms"],
-            timings["menu_items_ms"],
-            timings["relationships_ms"],
-            timings["option_groups_ms"],
-            timings["options_ms"],
-        )), 2)
+    #     timings["db_total_ms"] = round(sum((
+    #         timings["categories_ms"],
+    #         timings["menu_items_ms"],
+    #         timings["relationships_ms"],
+    #         timings["option_groups_ms"],
+    #         timings["options_ms"],
+    #     )), 2)
 
-        # 6. Build lookup dictionaries
-        assembly_start = time.perf_counter()
+    #     # 6. Build lookup dictionaries
+    #     assembly_start = time.perf_counter()
 
-        items_by_category: dict[UUID, list[MenuItem]] = {}
-        for item in menu_items:
-            if item.category_id is not None:
-                items_by_category.setdefault(item.category_id, []).append(item)
+    #     items_by_category: dict[UUID, list[MenuItem]] = {}
+    #     for item in menu_items:
+    #         if item.category_id is not None:
+    #             items_by_category.setdefault(item.category_id, []).append(item)
 
-        groups_by_item: dict[UUID, list[MenuItemOptionGroup]] = {}
-        for relationship in relationships:
-            groups_by_item.setdefault(relationship.menu_item_id, []).append(relationship)
+    #     groups_by_item: dict[UUID, list[MenuItemOptionGroup]] = {}
+    #     for relationship in relationships:
+    #         groups_by_item.setdefault(relationship.menu_item_id, []).append(relationship)
 
-        option_groups_by_id = {group.id: group for group in option_groups}
+    #     option_groups_by_id = {group.id: group for group in option_groups}
 
-        options_by_group: dict[UUID, list[Option]] = {}
-        for option in options:
-            options_by_group.setdefault(option.option_group_id, []).append(option)
+    #     options_by_group: dict[UUID, list[Option]] = {}
+    #     for option in options:
+    #         options_by_group.setdefault(option.option_group_id, []).append(option)
 
-        # 7. Build nested response
-        category_responses = []
+    #     # 7. Build nested response
+    #     category_responses = []
 
-        for category in categories:
-            item_responses = []
+    #     for category in categories:
+    #         item_responses = []
 
-            for item in items_by_category.get(category.id, []):
-                group_responses = []
+    #         for item in items_by_category.get(category.id, []):
+    #             group_responses = []
 
-                for relationship in groups_by_item.get(item.id, []):
-                    group = option_groups_by_id.get(relationship.option_group_id)
+    #             for relationship in groups_by_item.get(item.id, []):
+    #                 group = option_groups_by_id.get(relationship.option_group_id)
 
-                    if group is None:
-                        continue
+    #                 if group is None:
+    #                     continue
 
-                    option_responses = [
-                        MenuOptionResponse(
-                            id=option.id,
-                            name=option.name,
-                            additional_price=option.additional_price,
-                            display_order=option.display_order
-                        )
-                        for option in options_by_group.get(group.id, [])
-                    ]
+    #                 option_responses = [
+    #                     MenuOptionResponse(
+    #                         id=option.id,
+    #                         name=option.name,
+    #                         additional_price=option.additional_price,
+    #                         display_order=option.display_order
+    #                     )
+    #                     for option in options_by_group.get(group.id, [])
+    #                 ]
 
-                    group_responses.append(
-                        MenuOptionGroupResponse(
-                            id=group.id,
-                            name=group.name,
-                            description=group.description,
-                            is_required=group.is_required,
-                            min_selections=group.min_selections,
-                            max_selections=group.max_selections,
-                            display_order=relationship.display_order,
-                            options=option_responses
-                        )
-                    )
+    #                 group_responses.append(
+    #                     MenuOptionGroupResponse(
+    #                         id=group.id,
+    #                         name=group.name,
+    #                         description=group.description,
+    #                         is_required=group.is_required,
+    #                         min_selections=group.min_selections,
+    #                         max_selections=group.max_selections,
+    #                         display_order=relationship.display_order,
+    #                         options=option_responses
+    #                     )
+    #                 )
 
-                item_responses.append(
-                    MenuItemMenuResponse(
-                        id=item.id,
-                        category_id=item.category_id,
-                        name=item.name,
-                        description=item.description,
-                        sku=item.sku,
-                        price=item.price,
-                        status=item.status,
-                        image_path=item.image_path,
-                        display_order=item.display_order,
-                        option_groups=group_responses
-                    )
-                )
+    #             item_responses.append(
+    #                 MenuItemMenuResponse(
+    #                     id=item.id,
+    #                     category_id=item.category_id,
+    #                     name=item.name,
+    #                     description=item.description,
+    #                     sku=item.sku,
+    #                     price=item.price,
+    #                     status=item.status,
+    #                     image_path=item.image_path,
+    #                     display_order=item.display_order,
+    #                     option_groups=group_responses
+    #                 )
+    #             )
 
-            category_responses.append(
-                CategoryMenuResponse(
-                    id=category.id,
-                    name=category.name,
-                    description=category.description,
-                    display_order=category.display_order,
-                    items=item_responses
-                )
-            )
+    #         category_responses.append(
+    #             CategoryMenuResponse(
+    #                 id=category.id,
+    #                 name=category.name,
+    #                 description=category.description,
+    #                 display_order=category.display_order,
+    #                 items=item_responses
+    #             )
+    #         )
 
-        timings["assembly_ms"] = round((time.perf_counter() - assembly_start) * 1000, 2)
+    #     timings["assembly_ms"] = round((time.perf_counter() - assembly_start) * 1000, 2)
 
-        response = MenuResponse(categories=category_responses)
+    #     response = MenuResponse(categories=category_responses)
 
-        timings["menu_total_ms"] = round((time.perf_counter() - request_start) * 1000, 2)
-        timings["category_count"] = len(categories)
-        timings["menu_item_count"] = len(menu_items)
-        timings["relationship_count"] = len(relationships)
-        timings["option_group_count"] = len(option_groups)
-        timings["option_count"] = len(options)
+    #     timings["menu_total_ms"] = round((time.perf_counter() - request_start) * 1000, 2)
+    #     timings["category_count"] = len(categories)
+    #     timings["menu_item_count"] = len(menu_items)
+    #     timings["relationship_count"] = len(relationships)
+    #     timings["option_group_count"] = len(option_groups)
+    #     timings["option_count"] = len(options)
 
-        logger.info("MENU_TIMING %s", json.dumps(timings))
+    #     logger.info("MENU_TIMING %s", json.dumps(timings))
 
-        return response
+    #     return response
 
 
 

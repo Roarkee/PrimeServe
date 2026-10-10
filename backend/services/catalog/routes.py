@@ -354,152 +354,57 @@ def validate_menu_endpoint(request: MenuValidationRequest,session: SessionDep,
 
 
 
-from sqlalchemy import text
-import time
-
-# @router.get("/db-test")
-# def db_test(session: SessionDep):
-#     times = []
-
-#     for _ in range(5):
-#         start = time.perf_counter()
-
-#         session.exec(text("SELECT 1")).first()
-
-#         times.append(time.perf_counter() - start)
-
-#     return {"times": times}
-
-@router.get("/db-test")
-def db_test():
-    from sqlalchemy import text
-    from sqlmodel import Session
-    from .database import engine
-    import time
-
-    times = []
-
-    for _ in range(5):
-        start = time.perf_counter()
-
-        with Session(engine) as session:
-            session.exec(text("SELECT 1")).first()
-
-        times.append(time.perf_counter() - start)
-
-    return {"times": times}
-
-# Adjust to your actual import
-
 
 @router.get("/db-diagnostic")
-def db_diagnostic():
-
-
-
-    from sqlalchemy import text
-    from sqlmodel import Session
-    import time
-    from .database import engine
-
-    def measure_query_latency(engine):
-       
-        results = []
-
-        with Session(engine) as session:
-            session.connection()
-
-            for _ in range(10):
-                start = time.perf_counter()
-
-                row = session.exec(text("""
-                    SELECT
-                        EXTRACT(
-                            EPOCH FROM
-                            (clock_timestamp() - statement_timestamp())
-                        ) * 1000 AS server_elapsed_ms,
-                        pg_sleep(0.01)
-                """)).first()
-
-                client_elapsed_ms = (
-                    time.perf_counter() - start
-                ) * 1000
-
-                results.append({
-                    "server_elapsed_ms": round(
-                        float(row[0] or 0), 3
-                    ),
-                    "client_elapsed_ms": round(
-                        client_elapsed_ms, 2
-                    ),
-                })
-
-        return results
-    return measure_query_latency(engine)
-
-    
-    import time
-    from sqlalchemy import text
-    from sqlmodel import Session
-
-    from .database import engine  
-    with Session(engine) as session:
-        start = time.perf_counter()
-        session.connection()
-        checkout_ms = (time.perf_counter() - start) * 1000
-
-        query_times = []
-
-        for _ in range(5):
-            start = time.perf_counter()
-            session.exec(text("SELECT 1")).first()
-            query_times.append(round((time.perf_counter() - start) * 1000, 2))
-
-    return {
-        "connection_checkout_ms": round(checkout_ms, 2),
-        "select_1_times_ms": query_times,
-    }
-
-
-
-
-
-
-@router.get("/db-roundtrip-diagnostic")
-def db_diagnostic_roundtrip(
-    current_user=Depends(require_permission("catalog:view")),
+def db_diagnostic(
+    # current_user=Depends(require_permission("catalog:view")),
 ):
+    import time
+
+    from sqlalchemy import text
     from sqlmodel import Session
     from .database import engine
-
     results = []
 
+    # with Session(engine) as session:
+    #     # Time to obtain a connection from the pool.
+    #     start = time.perf_counter()
+    #     session.connection()
+    #     checkout_ms = (time.perf_counter() - start) * 1000
+
+    #     # First query on the checked-out connection.
+    #     start = time.perf_counter()
+    #     session.exec(text("SELECT 1")).first()
+    #     warmup_ms = (time.perf_counter() - start) * 1000
+
+    #     # Repeated queries using the same connection.
+    #     for i in range(10):
+    #         start = time.perf_counter()
+    #         session.exec(text("SELECT 1")).first()
+    #         elapsed_ms = (time.perf_counter() - start) * 1000
+
+    #         results.append({
+    #             "query": i + 1,
+    #             "client_elapsed_ms": round(elapsed_ms, 2),
+    #         })
+
+    #     # Measure a query that deliberately waits 10 ms on PostgreSQL.
+    #     start = time.perf_counter()
+    #     session.exec(text("SELECT pg_sleep(0.01)")).first()
+    #     sleep_query_ms = (time.perf_counter() - start) * 1000
+
+    # return {
+    #     "connection_checkout_ms": round(checkout_ms, 2),
+    #     "warmup_query_ms": round(warmup_ms, 2),
+    #     "repeated_queries": results,
+    #     "sleep_query_client_ms": round(sleep_query_ms, 2),
+    # }
+
+
+
     with Session(engine) as session:
-        # Measure obtaining a database connection.
-        start = time.perf_counter()
-        session.connection()
-        checkout_ms = (time.perf_counter() - start) * 1000
-
-        # Separate the first query from repeated queries.
-        start = time.perf_counter()
-        session.exec(text("SELECT 1")).first()
-        warmup_ms = (time.perf_counter() - start) * 1000
-
-        # Reuse the same checked-out connection.
         for i in range(10):
             start = time.perf_counter()
             session.exec(text("SELECT 1")).first()
             elapsed_ms = (time.perf_counter() - start) * 1000
-
-            results.append({
-                "query": i + 1,
-                "client_elapsed_ms": round(elapsed_ms, 2),
-            })
-
-    return {
-        "connection_checkout_ms": round(checkout_ms, 2),
-        "warmup_query_ms": round(warmup_ms, 2),
-        "repeated_queries": results,
-    }
-
-
+            print(f"Query {i + 1}: {elapsed_ms:.2f} ms")
