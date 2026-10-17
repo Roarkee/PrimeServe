@@ -27,7 +27,6 @@ from uuid import UUID
 from .services.option_group_service import OptionGroupService
 from .services.option_service import OptionService
 from .services.menu_item_option_service import MenuItemOptionGroupService
-from .services.pos_menu_service import MenuReadService
 from .services.validate_menu_service import validate_menu
 from .utils import verify_internal_service
 
@@ -327,14 +326,14 @@ def get_menu(
 ):
 
     # return MenuResponse(categories=[])
-    return MenuReadService.get_menu(
+    return MenuService.get_menu(
         session,
         current_user["restaurant_id"]
     )
 
 @router.post("/create_one_menu", response_model=MenuItemMenuResponse)
 def create_menu(session:SessionDep,data:MenuCreate, current_user=Depends(require_permission("catalog:create"))):
-    return MenuReadService.create_menu(session,data, current_user["restaurant_id"])
+    return MenuService.create_menu(session,data, current_user["restaurant_id"])
 
 
 

@@ -39,3 +39,34 @@ class MenuCreate(BaseModel):
     category_id: UUID | None = None
     category: CategoryCreate | None = None
     menu_item: MenuItemMenuCreate
+
+class MenuOptionUpdatePayload(BaseModel):
+    id: UUID | None = None
+    name: str | None = Field(default=None, max_length=100)
+    additional_price: Decimal | None = None
+    display_order: int | None = None
+    is_active: bool | None = None
+
+
+class MenuOptionGroupUpdatePayload(BaseModel):
+    id: UUID | None = None
+    name: str | None = Field(default=None, max_length=100)
+    description: str | None = Field(default=None, max_length=255)
+    is_required: bool | None = None
+    min_selections: int | None = None
+    max_selections: int | None = None
+    display_order: int | None = None
+    is_active: bool | None = None
+    options: list[MenuOptionUpdatePayload] | None = None
+
+
+class MenuItemUpdate(BaseModel):
+    category_id: UUID | None = None
+    name: str | None = Field(default=None, max_length=150)
+    description: str | None = Field(default=None, max_length=500)
+    sku: str | None = Field(default=None, max_length=50)
+    price: Decimal | None = None
+    status: MenuItemStatus | None = None
+    image_path: str | None = Field(default=None, max_length=500)
+    display_order: int | None = None
+    option_groups: list[MenuOptionGroupUpdatePayload] | None = None
