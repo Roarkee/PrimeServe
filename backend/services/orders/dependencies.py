@@ -3,7 +3,7 @@ from uuid import UUID
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from jose import JWTError, jwt
+import jwt
 from dotenv import load_dotenv
 import os
 load_dotenv()
@@ -38,7 +38,7 @@ def get_current_employee(
             "permissions": permissions,
         }
 
-    except (JWTError, ValueError):
+    except (jwt.PyJWKError, ValueError):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid authentication credentials.",

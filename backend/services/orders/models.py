@@ -2,7 +2,9 @@ from datetime import datetime, timezone,date
 from decimal import Decimal
 from enum import Enum
 from uuid import UUID, uuid4
-
+from typing import Any
+from sqlalchemy import Column, Index, Integer, Text
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlmodel import Field, SQLModel, DateTime,UniqueConstraint
 
 
@@ -16,11 +18,11 @@ class OrderStatus(str, Enum):
     COMPLETED = "completed"
     CANCELLED = "cancelled"
 
-class OrderItemStatus(str, Enum):
-    PENDING = "pending"
-    PREPARING = "preparing"
-    READY = "ready"
-    CANCELLED = "cancelled"
+# class OrderItemStatus(str, Enum):
+#     PENDING = "pending"
+#     PREPARING = "preparing"
+#     READY = "ready"
+#     CANCELLED = "cancelled"
 
 class OrderType(str, Enum):
     DINE_IN = "dine_in"
@@ -45,6 +47,7 @@ class Order(SQLModel, table=True):
     tax: Decimal = Field(default=Decimal("0.00"), max_digits=12, decimal_places=2)
     total: Decimal = Field(max_digits=12, decimal_places=2)
     notes: str | None = Field(default=None, max_length=500)
+    revision: int = Field(default=1, ge=1, sa_type=Integer, nullable=False)
     created_at: datetime = Field(default_factory=utc_now, nullable=False, sa_type=DateTime(timezone=True))
     updated_at: datetime = Field(default_factory=utc_now, nullable=False, sa_type=DateTime(timezone=True), sa_column_kwargs={"onupdate": utc_now})
 
@@ -62,7 +65,6 @@ class OrderItem(SQLModel, table=True):
     unit_price: Decimal = Field(max_digits=10,decimal_places=2,)
     quantity: int
     subtotal: Decimal = Field(max_digits=12,decimal_places=2,)
-    status: OrderItemStatus = Field(default=OrderItemStatus.PENDING)
     notes: str | None = Field(default=None, max_length=500)
     created_at: datetime = Field(default_factory=utc_now,nullable=False,sa_type=DateTime(timezone=True),)
 
@@ -95,6 +97,38 @@ class OrderNumberCounter(SQLModel, table=True):
     restaurant_id: UUID
     counter_date: date
     last_number: int = Field(default=0)
+
+
+
+class OutboxEvent(SQLModel, table=True):
+    __tablename__ = "outbox_events"
+    __table_args__ = (
+        Index("ix_outbox_status_available", "status", "available_at"),
+        Index("ix_outbox_aggregate", "aggregate_type", "aggregate_id"),
+        {"schema": "prime_orders"},
+        Index(
+            "uq_outbox_aggregate_version",
+            "aggregate_type",
+            "aggregate_id",
+            "aggregate_version",
+            unique=True,
+            )
+    )
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    aggregate_type: str = Field(max_length=50, nullable=False)
+    aggregate_id: UUID = Field(nullable=False)
+    event_type: str = Field(max_length=100, nullable=False)
+    aggregate_version: int = Field(ge=1, nullable=False)
+    payload: dict[str, Any] = Field(sa_column=Column(JSONB, nullable=False))
+    status: str = Field(default="pending", max_length=20, nullable=False)
+    attempts: int = Field(default=0, sa_type=Integer, ge=0, nullable=False)
+    available_at: datetime = Field(default_factory=utc_now, nullable=False)
+    created_at: datetime = Field(default_factory=utc_now, nullable=False)
+    published_at: datetime | None = Field(default=None)
+    locked_until: datetime | None = Field(default=None)
+    last_error: str | None = Field(default=None, sa_type=Text)
+    locked_by: str | None = Field(default=None, max_length=100)
 
 
 

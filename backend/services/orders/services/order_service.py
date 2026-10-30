@@ -2,11 +2,9 @@ from uuid import UUID
 from decimal import Decimal
 from datetime import datetime
 from zoneinfo import ZoneInfo
-
-from sqlmodel import Session, select
-
+from sqlmodel import Session, select,func
 from ..utils import generate_order_number
-from ..models import OrderStatus, Order, OrderItem, OrderItemOption,OrderItemStatus,OrderType
+from ..models import OrderStatus, Order, OrderItem, OrderItemOption,OrderType
 from ..schema import (
     OrderCreate,
     OrderResponse,
@@ -20,23 +18,19 @@ from ..schema import (
 from ..catalog_client import validate_with_catalog
 from .order_pricing import OrderPricingService
 from math import ceil
-
-from sqlalchemy import func
-from sqlmodel import select
-
+from .outbox_service import OutboxService
 
 
 class OrderService:
 
     @staticmethod
     def create_order(session: Session,data: OrderCreate,restaurant_id: UUID,):
-         
-
         if not data.items:
             raise ValueError("Order must contain at least one item.")
 
         pricing_service = OrderPricingService()
 
+        # Validate requested menu items and options with Catalog.
         catalog_request = CatalogValidationRequest(
             restaurant_id=restaurant_id,
             items=[
@@ -50,6 +44,9 @@ class OrderService:
         )
 
         validated_menu = validate_with_catalog(catalog_request)
+
+        if len(validated_menu.items) != len(data.items):
+            raise ValueError("Catalog returned an unexpected number of validated items.")
 
         calculated_items = []
         item_subtotals = []
@@ -72,34 +69,24 @@ class OrderService:
                 {
                     "request_item": request_item,
                     "validated_item": validated_item,
-                    "options_total": options_total,
                     "item_subtotal": item_subtotal,
                 }
             )
 
             item_subtotals.append(item_subtotal)
 
-        subtotal = pricing_service.calculate_subtotal(
-            item_subtotals
-        )
-        discount_type = "fixed"
-        discount_value = Decimal("0.00")
+        subtotal = pricing_service.calculate_subtotal(item_subtotals)
 
         discount = pricing_service.calculate_discount(
             subtotal=subtotal,
-            discount_type=discount_type,
-            discount_value=discount_value,
+            discount_type="fixed",
+            discount_value=Decimal("0.00"),
         )
-
-        tax_rate = Decimal("0.00")
-
-        taxable_amount = subtotal - discount
 
         tax = pricing_service.calculate_tax(
-            taxable_amount=taxable_amount,
-            tax_rate=tax_rate,
+            taxable_amount=subtotal - discount,
+            tax_rate=Decimal("0.00"),
         )
-
 
         total = pricing_service.calculate_total(
             subtotal=subtotal,
@@ -112,7 +99,6 @@ class OrderService:
         ).date()
 
         try:
-
             order_number = generate_order_number(
                 session=session,
                 restaurant_id=restaurant_id,
@@ -123,7 +109,8 @@ class OrderService:
                 restaurant_id=restaurant_id,
                 order_number=order_number,
                 order_type=data.order_type,
-                status=OrderStatus.PENDING,
+                status=OrderStatus.CONFIRMED,
+                revision=1,
                 subtotal=subtotal,
                 discount=discount,
                 tax=tax,
@@ -134,8 +121,12 @@ class OrderService:
             session.add(order)
             session.flush()
 
-            for calculated in calculated_items:
+            # Keep the persisted objects so we can build both the
+            # event snapshot and API response without querying again.
+            response_items = []
+            event_items = []
 
+            for calculated in calculated_items:
                 request_item = calculated["request_item"]
                 validated_item = calculated["validated_item"]
                 item_subtotal = calculated["item_subtotal"]
@@ -148,14 +139,14 @@ class OrderService:
                     quantity=validated_item.quantity,
                     subtotal=item_subtotal,
                     notes=request_item.notes,
-                    status=OrderItemStatus.PENDING,
                 )
 
                 session.add(order_item)
                 session.flush()
 
-                for option in validated_item.options:
+                option_rows = []
 
+                for option in validated_item.options:
                     order_item_option = OrderItemOption(
                         order_item_id=order_item.id,
                         option_id=option.option_id,
@@ -165,54 +156,20 @@ class OrderService:
                     )
 
                     session.add(order_item_option)
+                    option_rows.append(order_item_option)
 
-            session.commit()
-            session.refresh(order)
+                session.flush()
 
-            items = session.exec(
-                select(OrderItem).where(
-                    OrderItem.order_id == order.id
-                )
-            ).all()
-
-            item_ids = [item.id for item in items]
-
-            item_options = []
-
-            if item_ids:
-                item_options = session.exec(
-                    select(OrderItemOption).where(
-                        OrderItemOption.order_item_id.in_(item_ids)
-                    )
-                ).all()
-
-            options_by_item = {}
-
-            for option in item_options:
-                options_by_item.setdefault(
-                    option.order_item_id,
-                    []
-                ).append(option)
-
-            response_items = []
-
-            for item in items:
-
-                options = options_by_item.get(
-                    item.id,
-                    []
-                )
-
+                # Build the API response item.
                 response_items.append(
                     OrderItemResponse(
-                        id=item.id,
-                        menu_item_id=item.menu_item_id,
-                        name=item.name,
-                        unit_price=item.unit_price,
-                        quantity=item.quantity,
-                        subtotal=item.subtotal,
-                        notes=item.notes,
-                        status=item.status,
+                        id=order_item.id,
+                        menu_item_id=order_item.menu_item_id,
+                        name=order_item.name,
+                        unit_price=order_item.unit_price,
+                        quantity=order_item.quantity,
+                        subtotal=order_item.subtotal,
+                        notes=order_item.notes,
                         options=[
                             OrderItemOptionResponse(
                                 id=option.id,
@@ -221,14 +178,71 @@ class OrderService:
                                 additional_price=option.additional_price,
                                 quantity=option.quantity,
                             )
-                            for option in options
+                            for option in option_rows
                         ],
                     )
                 )
 
-            return OrderResponse(
+                # Build the immutable event snapshot item.
+                event_items.append(
+                    {
+                        "id": str(order_item.id),
+                        "menu_item_id": str(order_item.menu_item_id),
+                        "name": order_item.name,
+                        "unit_price": str(order_item.unit_price),
+                        "quantity": order_item.quantity,
+                        "subtotal": str(order_item.subtotal),
+                        "notes": order_item.notes,
+                        "options": [
+                            {
+                                "id": str(option.id),
+                                "option_id": str(option.option_id),
+                                "name": option.name,
+                                "additional_price": str(option.additional_price),
+                                "quantity": option.quantity,
+                            }
+                            for option in option_rows
+                        ],
+                    }
+                )
+
+            # Make sure all order data is persisted within the
+            # current transaction before recording the event.
+            session.flush()
+
+            order_snapshot = {
+                "schema_version": 1,
+                "order": {
+                    "id": str(order.id),
+                    "restaurant_id": str(order.restaurant_id),
+                    "order_number": order.order_number,
+                    "order_type": order.order_type.value,
+                    "status": order.status.value,
+                    "revision": order.revision,
+                    "subtotal": str(order.subtotal),
+                    "discount": str(order.discount),
+                    "tax": str(order.tax),
+                    "total": str(order.total),
+                    "notes": order.notes,
+                    "created_at": order.created_at.isoformat(),
+                    "updated_at": order.updated_at.isoformat(),
+                    "items": event_items,
+                },
+            }
+
+            OutboxService.create_event(
+                session,
+                aggregate_type="order",
+                aggregate_id=order.id,
+                event_type="order.created",
+                aggregate_version=order.revision,
+                payload=order_snapshot,
+            )
+
+            # Construct the response before committing. If the commit
+            # fails, the response is never returned.
+            response = OrderResponse(
                 id=order.id,
-                restaurant_id=order.restaurant_id,
                 order_number=order.order_number,
                 order_type=order.order_type,
                 status=order.status,
@@ -242,10 +256,15 @@ class OrderService:
                 items=response_items,
             )
 
+            # One commit for the order, its items, its options,
+            # and its outbox event.
+            session.commit()
+
+            return response
+
         except Exception:
             session.rollback()
             raise
-
 
 
     @staticmethod
@@ -293,6 +312,8 @@ class OrderService:
             "page_size": page_size,
             "total_pages": total_pages,
         }
+
+
     @staticmethod
     def get_order(pk:UUID, session:Session, restaurant_id: UUID):
         order = session.exec(

@@ -2,14 +2,14 @@ from decimal import Decimal
 from uuid import UUID
 
 from pydantic import BaseModel, Field
-from .models import OrderType,OrderStatus,OrderItemStatus
+from .models import OrderType,OrderStatus
 from datetime import datetime
 
 
 class OrderItemCreate(BaseModel):
     menu_item_id: UUID
     quantity: int = Field(gt=0)
-    option_ids: list[UUID] = []
+    option_ids: list[UUID] = Field(default_factory=list)
     notes: str | None = Field(default=None, max_length=500)
 
 
@@ -36,7 +36,7 @@ class OrderItemResponse(BaseModel):
     quantity: int
     subtotal: Decimal
     notes: str | None
-    status: OrderItemStatus
+    preparation_status: str | None = None
     options: list[OrderItemOptionResponse]
 
 

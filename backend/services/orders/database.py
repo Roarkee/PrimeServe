@@ -9,7 +9,7 @@ BASE_DIR = Path(__file__).resolve().parent
 
 load_dotenv(BASE_DIR/".env")
 
-DB_URL = os.getenv("DB_URL")
+DB_URL = os.getenv("LOCAL_DATABASE_URL")
 
 engine = create_engine(DB_URL)
 

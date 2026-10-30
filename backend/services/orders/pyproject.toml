@@ -8,7 +8,6 @@ dependencies = [
     "fastapi[standard]>=0.142.2",
     "psycopg2>=2.9.13",
     "pyjwt>=2.15.1",
-    "python-jose[cryptography]>=3.5.0",
     "sqlmodel>=0.0.47",
     "tzdata>=2026.5",
 ] 

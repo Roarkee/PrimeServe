@@ -15,8 +15,6 @@ load_dotenv(BASE_DIR/".env")
 CATALOG_URL = "http://localhost:8001"
 
 CATALOG_API_SECRET=getenv("CATALOG_API_SECRET")
-# print("the catalog secret",CATALOG_API_SECRET)
-
 
 
 def validate_with_catalog(

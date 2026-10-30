@@ -6,7 +6,7 @@ from sqlalchemy import pool
 from alembic import context
 from dotenv import load_dotenv
 from sqlmodel import SQLModel
-from models import (Order,OrderItem,OrderItemOption,OrderNumberCounter,OrderStatus,OrderType)
+from models import (Order,OrderItem,OrderItemOption,OrderNumberCounter,OrderStatus,OrderType,OutboxEvent)
 
 
 import os
@@ -35,7 +35,7 @@ target_metadata = SQLModel.metadata
 # my_important_option = config.get_main_option("my_important_option")
 # ... etc.
 
-DATABASE_URL = os.getenv("DB_URL")
+DATABASE_URL = os.getenv("LOCAL_DATABASE_URL")
 
 if not DATABASE_URL:
     raise RuntimeError("DATABASE_URL is not set")
