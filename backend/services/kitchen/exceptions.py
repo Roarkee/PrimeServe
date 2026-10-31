@@ -1,0 +1,4 @@
+class BusinessError(Exception):
+    pass
+
+
