@@ -5,7 +5,7 @@ from .utils import verify_decode_token
 bearer = HTTPBearer()
 
 
-def get_user(credentials= Depends(HTTPAuthorizationCredentials(bearer)))->dict:
+def get_user(credentials: HTTPAuthorizationCredentials=Depends(bearer))->dict:
     token = credentials.credentials
     credentials_exception = HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
