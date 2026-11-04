@@ -13,7 +13,7 @@ def get_user(credentials: HTTPAuthorizationCredentials=Depends(bearer))->dict:
             headers={"WWW-Authenticate": "Bearer"},
         )
     payload = verify_decode_token(token)
-    if payload['sub'] is None or payload['type'] != 'access':
+    if not payload:
         raise credentials_exception
 
     return payload

@@ -1,10 +1,10 @@
 from fastapi import HTTPException,APIRouter,Depends
-from .database import SessionDep
-from .schema.internal_schema import KitchenOrderEvent, OrderEventResponse
-from .services.order_comm_service import OrderEventService
-from .dependencies import require_permission
-from .schema.schema import MenuRoute
-from .services.menu_routing import create_menu_route
+from ..database import SessionDep
+from ..schema.internal_schema import KitchenOrderEvent, OrderEventResponse
+from ..services.order_comm_service import OrderEventService
+from ..dependencies import require_permission
+from ..schema.schema import MenuRoute
+from ..services.menu_routing import create_menu_route
 
 
 kitchen_router = APIRouter(prefix="/kitchen", tags=["Kitchen House"])

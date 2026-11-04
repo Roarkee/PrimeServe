@@ -3,7 +3,7 @@ from dotenv import load_dotenv
 from pathlib import Path
 import jwt
 from fastapi import Header, HTTPException, status
-
+from .exceptions import MissingStuff
 
 
 BASE_DIR =  Path(__file__).resolve().parent
@@ -15,15 +15,21 @@ SECRET_KEY = getenv("SECRET_KEY")
 JWT_ALGO = getenv('JWT_ALGO')
 
 def verify_decode_token(token:str)->dict:
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+    )
     try:
         payload = jwt.decode(token, key=SECRET_KEY, algorithms=[JWT_ALGO])
     except jwt.ExpiredSignatureError as e:
-        raise HTTPException(status_code=401, detail=str(e))
+        raise credentials_exception
     except jwt.InvalidTokenError as e:
-        raise HTTPException(status_code=401, detail=str(e))
+        raise credentials_exception
     except jwt.InvalidSignatureError as e:
-        raise HTTPException(status_code=401, detail=str(e))
+        raise credentials_exception
 
     if payload.get('type') != 'access':
-        raise ValueError("this token is not valid")
+        raise credentials_exception
+    if payload['sub'] is None or payload['type'] != 'access':
+        raise credentials_exception
     return payload

@@ -5,3 +5,6 @@ class BusinessError(Exception):
 class AlreadyExistsError(BusinessError):
     pass
 
+class MissingStuff(Exception):
+    pass
+
