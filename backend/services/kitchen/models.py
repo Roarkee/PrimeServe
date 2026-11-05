@@ -133,7 +133,14 @@ class KitchenTicketItem(SQLModel, table=True):
     cancelled_at: datetime | None = Field(default=None, sa_type=DateTime(timezone=True))
     created_at: datetime = Field(default_factory=utc_now, sa_type=DateTime(timezone=True))
     updated_at: datetime = Field(default_factory=utc_now, sa_type=DateTime(timezone=True),sa_column_kwargs={"onupdate":utc_now})
-    routing_status: KitchenRoutingStatus = Field(default=KitchenRoutingStatus.UNROUTED)
+    routing_status: KitchenRoutingStatus = Field(
+        default=KitchenRoutingStatus.UNROUTED,
+        sa_column=Column(
+            SAEnum(KitchenRoutingStatus, name="kitchenroutingstatus", schema=KITCHEN_SCHEMA),
+            nullable=False,
+            default=KitchenRoutingStatus.UNROUTED,
+        ),
+    )
 
 class KitchenDevice(SQLModel, table=True):
     __tablename__ = "kitchen_devices"

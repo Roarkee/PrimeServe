@@ -1,3 +1,6 @@
+import os
+import sys
+from pathlib import Path
 from logging.config import fileConfig
 
 from sqlalchemy import engine_from_config
@@ -7,6 +10,12 @@ from alembic import context
 from dotenv import load_dotenv
 from sqlmodel import SQLModel
 
+BASE_DIR = Path(__file__).resolve().parent.parent
+if str(BASE_DIR) not in sys.path:
+    sys.path.insert(0, str(BASE_DIR))
+
+load_dotenv(BASE_DIR / ".env")
+
 from models import (
 KitchenDevice,
 KitchenDeviceMode,
@@ -15,12 +24,6 @@ KitchenEventType,KitchenItemStatus,KitchenTicket,
 KitchenTicketItem,KitchenTicketItemRoute,KitchenTicketStatus,ProcessedEvent,PrepStation,
 MenuItemRouting,KitchenRoutingStatus
 )
-
-import os
-
-
-
-load_dotenv()
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
